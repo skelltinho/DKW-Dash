@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar 
 } from 'recharts';
 import { 
   ArrowUpRight, ArrowDownRight, DollarSign, Users, CreditCard, Calendar, 
-  Download, Search, Bell, MoreHorizontal, CheckCircle2, Clock, TrendingUp
+  Download, Search, Bell, MoreHorizontal, CheckCircle2, Clock,
+  Lock, Hourglass, UserPlus, AlertCircle, Plus, X, Trash2
 } from 'lucide-react';
 
 // Utilitários de Formatação
@@ -35,6 +36,16 @@ const generateCompanyName = () => {
   return `${prefix} ${mid} ${suffix}`.trim();
 };
 
+const generateWaitingList = () => {
+  return Array.from({ length: 5 }).map((_, i) => ({
+    id: i + 1,
+    company: generateCompanyName(),
+    date: new Date(Date.now() - Math.floor(Math.random() * 5) * 24 * 60 * 60 * 1000), // últimos 5 dias
+    status: 'Aguardando',
+    priority: i === 0 ? 'Alta' : 'Normal'
+  }));
+};
+
 // Gerador de Dados
 const generateData = () => {
   const transactions = [];
@@ -50,8 +61,11 @@ const generateData = () => {
     currentDate.setDate(today.getDate() - i);
     const dateStr = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD
 
-    // Determinar quantidade de vendas do dia (Média de 6, variando entre 2 e 10)
-    const baseSales = Math.floor(Math.random() * 9) + 2; 
+    // Lógica ajustada: Vendas raras para realismo de ticket alto
+    const rand = Math.random();
+    let baseSales = 0;
+    if (rand > 0.4 && rand <= 0.9) baseSales = 1;
+    else if (rand > 0.9) baseSales = 2;
     
     let dailyRevenue = 0;
 
@@ -60,7 +74,7 @@ const generateData = () => {
       // Ticket médio entre 6997 e 12697
       const amount = Math.floor(Math.random() * (12697 - 6997 + 1)) + 6997;
       
-      // Gerar hora aleatória, evitando sobreposição óbvia
+      // Gerar hora aleatória
       let hour = Math.floor(Math.random() * 24);
       if (Math.random() > 0.3) { 
         hour = Math.floor(Math.random() * (18 - 8 + 1)) + 8;
@@ -101,25 +115,94 @@ const generateData = () => {
 
 export default function DashboardFake() {
   const [data, setData] = useState(null);
+  const [waitingList, setWaitingList] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newLeadName, setNewLeadName] = useState('');
 
   useEffect(() => {
     setData(generateData());
+    setWaitingList(generateWaitingList());
   }, []);
+
+  const handleAddLead = () => {
+    if (!newLeadName.trim()) return;
+    
+    const newLead = {
+      id: Date.now(), // ID único baseado em timestamp
+      company: newLeadName,
+      date: new Date(),
+      status: 'Aguardando',
+      priority: 'Normal'
+    };
+
+    setWaitingList([newLead, ...waitingList]); // Adiciona no topo
+    setNewLeadName('');
+    setIsModalOpen(false);
+  };
+
+  const handleDeleteLead = (id) => {
+    setWaitingList(waitingList.filter(lead => lead.id !== id));
+  };
 
   if (!data) return <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-400">Carregando Dashboard...</div>;
 
   const { transactions, chartData, totalRevenue, totalSalesCount } = data;
-  const avgTicket = totalRevenue / totalSalesCount;
+  const avgTicket = totalSalesCount > 0 ? totalRevenue / totalSalesCount : 0;
+
+  // Vagas fixas visualmente em 2, independente da lista, para manter a escassez
+  const slotsRemaining = 2; 
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 font-sans">
+    <div className="min-h-screen bg-gray-900 text-gray-100 font-sans relative">
+      
+      {/* Modal de Adicionar Lead */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+          <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-white">Adicionar Novo Lead</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Nome da Empresa / Lead</label>
+                <input 
+                  type="text" 
+                  value={newLeadName}
+                  onChange={(e) => setNewLeadName(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-[#10B981] focus:border-transparent outline-none"
+                  placeholder="Ex: Empresa X Ltda"
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button 
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleAddLead}
+                  className="px-4 py-2 bg-[#10B981] hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-emerald-900/20"
+                >
+                  Adicionar à Fila
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Navigation */}
       <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center gap-4">
-              <div className="bg-[#10B981] p-1.5 rounded-full flex items-center justify-center"> {/* Green from your logo */}
-                <img src="https://i.imgur.com/uR1u72q.png" alt="DKW SYSTEM Logo" className="h-7 w-7 rounded-full" />
+              <div className="bg-[#10B981] p-1.5 rounded-full flex items-center justify-center"> 
+                <img src="https://media.licdn.com/dms/image/v2/D4D0BAQETc9zfKHbmYA/company-logo_200_200/company-logo_200_200/0/1739385509585?e=2147483647&v=beta&t=eXvobOAWKEi__5fkxwYlQfk5YBkfiiyHHJwUPGh1SGA" alt="DKW SYSTEM Logo" className="h-7 w-7 rounded-full" />
               </div>
               <span className="font-bold text-xl tracking-tight text-gray-50">DKW Dash</span>
             </div>
@@ -142,10 +225,10 @@ export default function DashboardFake() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
-        <div className="md:flex md:items-center md:justify-between mb-8">
+        <div className="md:flex md:items-center md:justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-50">Visão Geral</h1>
-            <p className="mt-1 text-sm text-gray-400">Acompanhamento de receita e conversão dos últimos 30 dias.</p>
+            <p className="mt-1 text-sm text-gray-400">Dashboard operacional e fila de implementação.</p>
           </div>
           <div className="mt-4 md:mt-0 flex space-x-3">
             <button className="inline-flex items-center px-4 py-2 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#10B981] focus:ring-offset-gray-900">
@@ -156,6 +239,75 @@ export default function DashboardFake() {
               <Download className="w-4 h-4 mr-2" />
               Exportar Relatório
             </button>
+          </div>
+        </div>
+
+        {/* NOVA FILA HORIZONTAL */}
+        <div className="mb-8 bg-gray-800 rounded-xl border border-gray-700 p-1 shadow-md">
+          <div className="flex flex-col md:flex-row items-stretch">
+             {/* Status Box (Esquerda) */}
+             <div className="p-5 md:w-64 bg-gray-750 md:border-r border-gray-700 rounded-l-xl flex flex-col justify-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-2 opacity-10">
+                   <Hourglass className="w-24 h-24 text-white" />
+                </div>
+                <div className="relative z-10">
+                   <div className="flex items-center gap-2 text-amber-400 mb-2">
+                      <AlertCircle className="w-5 h-5" />
+                      <span className="text-xs font-bold uppercase tracking-wider">Alta Demanda</span>
+                   </div>
+                   <div className="text-3xl font-bold text-gray-50 mb-1">{slotsRemaining} Vagas</div>
+                   <p className="text-xs text-gray-400 mb-4">Restantes para implementação este mês.</p>
+                   
+                   <button 
+                      onClick={() => setIsModalOpen(true)}
+                      className="w-full py-2 px-3 bg-[#10B981] hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
+                   >
+                      <Plus className="w-4 h-4" />
+                      Novo Lead
+                   </button>
+                </div>
+             </div>
+
+             {/* Lista Horizontal (Direita) */}
+             <div className="flex-1 p-4 overflow-x-auto">
+                <div className="flex gap-4 min-w-full">
+                   {waitingList.map((client, index) => (
+                      <div key={client.id} className="min-w-[200px] p-4 bg-gray-700 rounded-lg border border-gray-600 hover:border-gray-500 transition-all group relative">
+                         <div className="flex justify-between items-start mb-2">
+                            <span className="bg-gray-800 text-gray-300 text-xs font-bold px-2 py-1 rounded">
+                               #{index + 1}
+                            </span>
+                            {/* Delete Button (Visible on Hover) */}
+                            <button 
+                              onClick={() => handleDeleteLead(client.id)}
+                              className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Remover da fila"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                         </div>
+                         <h4 className="font-semibold text-gray-100 truncate mb-1" title={client.company}>{client.company}</h4>
+                         <p className="text-xs text-gray-400 mb-3">
+                           {client.date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                         </p>
+                         <div className="flex items-center justify-between mt-auto">
+                            <div className="flex items-center gap-1.5">
+                               <div className={`w-2 h-2 rounded-full ${index === 0 ? 'bg-amber-400 animate-pulse' : 'bg-gray-500'}`}></div>
+                               <span className="text-[10px] uppercase text-gray-400 font-medium">{client.status}</span>
+                            </div>
+                            <Lock className="w-3 h-3 text-gray-600" />
+                         </div>
+                      </div>
+                   ))}
+                   {/* Card Vazio / Placeholder para ilustrar espaço */}
+                   {[...Array(slotsRemaining)].map((_, i) => (
+                      <div key={`empty-${i}`} className="min-w-[200px] p-4 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center text-gray-600 opacity-60">
+                         <UserPlus className="w-8 h-8 mb-2" />
+                         <span className="text-xs font-medium">Vaga Disponível</span>
+                      </div>
+                   ))}
+                </div>
+             </div>
           </div>
         </div>
 
@@ -303,7 +455,7 @@ export default function DashboardFake() {
                       <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#4b5563" /> {/* Darker grid lines */}
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#4b5563" /> 
                   <XAxis 
                     dataKey="name" 
                     stroke="#9ca3af" 
@@ -311,7 +463,7 @@ export default function DashboardFake() {
                     tickLine={false}
                     axisLine={false}
                     minTickGap={30}
-                    tickFormatter={(value) => value.substring(0,5)} // Display only DD/MM for brevity in chart
+                    tickFormatter={(value) => value.substring(0,5)} 
                   />
                   <YAxis 
                     stroke="#9ca3af" 
@@ -339,41 +491,43 @@ export default function DashboardFake() {
           </div>
 
           {/* Secondary Chart / Info */}
-          <div className="bg-gray-800 rounded-xl shadow-md border border-gray-700 p-6">
-             <h3 className="text-lg font-semibold text-gray-50 mb-6">Volume de Vendas</h3>
-             <div className="h-48 w-full mb-4">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#4b5563" />
-                    <XAxis dataKey="name" hide />
-                    <Tooltip 
-                      cursor={{fill: '#374151'}}
-                      contentStyle={{ backgroundColor: '#2d3748', borderRadius: '8px', border: '1px solid #4a5568', color: '#e2e8f0' }}
-                      formatter={(value) => [value, 'Vendas']}
-                      labelFormatter={(label) => `Data: ${label}`}
-                    />
-                    <Bar dataKey="qtd" fill="#10B981" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-             </div>
-             <div className="space-y-4">
-               <div className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
-                  <span className="text-sm text-gray-300 font-medium">Maior Pico</span>
-                  <span className="text-sm font-bold text-emerald-400">
-                    {Math.max(...chartData.map(d => d.qtd))} vendas
-                  </span>
+          <div className="bg-gray-800 rounded-xl shadow-md border border-gray-700 p-6 flex flex-col justify-between">
+             <div>
+               <h3 className="text-lg font-semibold text-gray-50 mb-6">Volume de Vendas</h3>
+               <div className="h-48 w-full mb-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#4b5563" />
+                      <XAxis dataKey="name" hide />
+                      <Tooltip 
+                        cursor={{fill: '#374151'}}
+                        contentStyle={{ backgroundColor: '#2d3748', borderRadius: '8px', border: '1px solid #4a5568', color: '#e2e8f0' }}
+                        formatter={(value) => [value, 'Vendas']}
+                        labelFormatter={(label) => `Data: ${label}`}
+                      />
+                      <Bar dataKey="qtd" fill="#10B981" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                </div>
-               <div className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
-                  <span className="text-sm text-gray-300 font-medium">Média Diária</span>
-                  <span className="text-sm font-bold text-gray-50">
-                    {(totalSalesCount / 30).toFixed(1)} vendas
-                  </span>
+               <div className="space-y-4">
+                 <div className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+                    <span className="text-sm text-gray-300 font-medium">Maior Pico</span>
+                    <span className="text-sm font-bold text-emerald-400">
+                      {Math.max(...chartData.map(d => d.qtd))} vendas
+                    </span>
+                 </div>
+                 <div className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+                    <span className="text-sm text-gray-300 font-medium">Média Diária</span>
+                    <span className="text-sm font-bold text-gray-50">
+                      {(totalSalesCount / 30).toFixed(1)} vendas
+                    </span>
+                 </div>
                </div>
              </div>
           </div>
         </div>
 
-        {/* Transactions Table */}
+        {/* Transactions Table (Agora ocupa 100% da largura) */}
         <div className="bg-gray-800 shadow-md rounded-xl border border-gray-700 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-700 flex justify-between items-center">
             <h3 className="text-lg font-semibold text-gray-50">Transações Recentes</h3>
@@ -388,9 +542,6 @@ export default function DashboardFake() {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Método</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Valor</th>
-                  <th scope="col" className="relative px-6 py-3">
-                    <span className="sr-only">Ações</span>
-                  </th>
                 </tr>
               </thead>
               <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -428,11 +579,6 @@ export default function DashboardFake() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-50">
                       {formatCurrency(transaction.amount)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button className="text-gray-400 hover:text-gray-200">
-                        <MoreHorizontal className="w-5 h-5" />
-                      </button>
                     </td>
                   </tr>
                 ))}
